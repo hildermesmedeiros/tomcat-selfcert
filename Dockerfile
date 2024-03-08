@@ -2,6 +2,19 @@ FROM apache2-tomcat:latest
 
 # Set working directory to Apache's directory
 WORKDIR /etc/apache2
+# Define arguments with default values
+ARG HOSTNAME=localhost
+ARG TOMCAT_USERNAME=defaultusername
+ARG TOMCAT_PASSWORD=defaultpassword
+ARG TOMCAT_KEY_ALIAS=defaultalias
+ARG TOMCAT_KEY_PASSWORD=defaultkeypassword
+
+# Set environment variables from the ARGs
+ENV HOSTNAME=${HOSTNAME}
+ENV TOMCAT_USERNAME=${TOMCAT_USERNAME}
+ENV TOMCAT_PASSWORD=${TOMCAT_PASSWORD}
+ENV TOMCAT_KEY_ALIAS=${TOMCAT_KEY_ALIAS}
+ENV TOMCAT_KEY_PASSWORD=${TOMCAT_KEY_PASSWORD}
 
 # Copy the custom server.xml to the container
 COPY server.xml /usr/local/tomcat/conf/server.xml
@@ -14,7 +27,7 @@ RUN keytool -genkeypair \
   -alias tomcat.${HOSTNAME} \
   -keyalg RSA -keysize 2048 \
   -keystore /usr/local/tomcat/conf/keystore.p12 -validity 3650 \
-  -storepass ARCgis22 -keypass ARCgis22 \
+  -storepass ${TOMCAT_KEY_ALIAS} -keypass ${TOMCAT_KEY_PASSWORD} \
   -dname "CN=${HOSTNAME}, OU=Self Signed Certificate" \
   -ext SAN=dns:${HOSTNAME},dns:${HOSTNAME^^}
 
