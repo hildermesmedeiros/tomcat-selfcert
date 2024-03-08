@@ -10,4 +10,6 @@ services:
     environment:
       - JAVA_OPTS=-Djava.awt.headless=true -Xmx128m -Xms64m
       - TOMCAT_USERNAME=tomcatuser
-      - TOMCAT_PASSWORD=TOMcat
+      - TOMCAT_PASSWORD=TOMcat123
+      - TOMCAT_KEY_ALIAS=tomcat
+      - TOMCAT_KEY_PASSWORD=TOMcat123
