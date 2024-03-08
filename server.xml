@@ -88,7 +88,7 @@
                maxThreads="150" SSLEnabled="true">
         <SSLHostConfig>
             <Certificate certificateKeystoreFile="/usr/local/tomcat/conf/keystore.p12"
-                         certificateKeystorePassword="${TOMCAT_KEY_PASS}"
+                         certificateKeystorePassword="${TOMCAT_KEY_PASSWORD}"
                          certificateKeyAlias="${TOMCAT_KEY_ALIAS}"
                          type="RSA" />
         </SSLHostConfig>
