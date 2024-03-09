@@ -24,7 +24,7 @@ RUN tar -xvzf /etc/apache2/apache-tomcat-*.tar.gz -C /usr/local/tomcat --strip-c
 RUN chown -R tomcat:tomcat /usr/local/tomcat
 RUN chmod -R u+x /usr/local/tomcat/bin
 
-ENV JAVA_VERSION=jdk-21.0.2+13
+ENV JAVA_VERSION=jdk-17.0.10
 ENV JAVA_HOME=/usr/lib/jvm/java-1.17.0-openjdk-amd64
 ENV JAVA_OPTS=-Djava.security.egd=file:///dev/urandom
 ENV CATALINA_BASE=/usr/local/tomcat
