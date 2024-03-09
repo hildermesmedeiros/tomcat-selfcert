@@ -1,71 +1,55 @@
-FROM apache2-tomcat:latest
+FROM ubuntu/apache2
 
 # Set working directory to Apache's directory
 WORKDIR /etc/apache2
-# Define arguments with default values
-ARG HOSTNAME=localhost
-ARG TOMCAT_USERNAME=defaultusername
-ARG TOMCAT_PASSWORD=defaultpassword
-ARG TOMCAT_KEY_ALIAS=defaultalias
-ARG TOMCAT_KEY_PASSWORD=defaultkeypassword
 
-# Set environment variables from the ARGs
-ENV HOSTNAME=${HOSTNAME}
-ENV TOMCAT_USERNAME=${TOMCAT_USERNAME}
-ENV TOMCAT_PASSWORD=${TOMCAT_PASSWORD}
-ENV TOMCAT_KEY_ALIAS=${TOMCAT_KEY_ALIAS}
-ENV TOMCAT_KEY_PASSWORD=${TOMCAT_KEY_PASSWORD}
+RUN useradd -m -d /opt/tomcat -U -s /bin/false tomcat
+# Install OpenSSL and Tomcat using cache mount for apt cache
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
+    apt-get install -y \
+    openssl \
+    default-jdk \
+    wget \
+    gosu \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+   
+RUN /bin/sh -c set -eux; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl wget fontconfig ca-certificates p11-kit binutils tzdata locales ; echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen; locale-gen en_US.UTF-8; rm -rf /var/lib/apt/lists/*
 
-# Copy the custom server.xml to the container
-COPY server.xml /usr/local/tomcat/conf/server.xml
+COPY ./apache-tomcat-*.tar.gz .
+RUN mkdir /usr/local/tomcat
+RUN tar -xvzf /etc/apache2/apache-tomcat-*.tar.gz -C /usr/local/tomcat --strip-components=1
+
+RUN chown -R tomcat:tomcat /usr/local/tomcat
+RUN chmod -R u+x /usr/local/tomcat/bin
+
+ENV JAVA_VERSION=jdk-21.0.2+13
+ENV JAVA_HOME=/usr/lib/jvm/java-1.17.0-openjdk-amd64
+ENV JAVA_OPTS=-Djava.security.egd=file:///dev/urandom
+ENV CATALINA_BASE=/usr/local/tomcat
+ENV CATALINA_HOME=/usr/local/tomcat
+ENV CATALINA_PID=/usr/local/tomcat/temp/tomcat.pid
+ENV CATALINA_OPTS="-Xms512M -Xmx1024M -server -XX:+UseParallelGC"
+ENV TOMCAT_MAJOR=10
+ENV TOMCAT_VERSION=10.1.19
+
+# Generate en_US.UTF-8
+RUN locale-gen en_US.UTF-8
+
+# Set the locale
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+
+RUN /bin/sh -c set -eux; echo "Verifying install ..."; fileEncoding="$(echo 'System.out.println(System.getProperty("file.encoding"))' | jshell -s -)"; [ "$fileEncoding" = 'UTF-8' ]; rm -rf ~/.java; echo "javac --version"; javac --version; echo "java --version"; java --version; echo "Complete."
 
 # Enable necessary Apache modules for proxying
 RUN a2enmod proxy proxy_http ssl rewrite proxy_ajp
 
-# Generate a keystore and self-signed certificate for Tomcat
-RUN keytool -genkeypair \
-  -alias tomcat.${HOSTNAME} \
-  -keyalg RSA -keysize 2048 \
-  -keystore /usr/local/tomcat/conf/keystore.p12 -validity 3650 \
-  -storepass ${TOMCAT_KEY_ALIAS} -keypass ${TOMCAT_KEY_PASSWORD} \
-  -dname "CN=${HOSTNAME}, OU=Self Signed Certificate" \
-  -ext SAN=dns:${HOSTNAME},dns:${HOSTNAME^^}
-
-RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
- -keyout /etc/ssl/private/apache-selfsigned.key \
- -out /etc/ssl/certs/apache-selfsigned.crt \
- -subj "/OU=Self Signed Certificate/CN=${HOSTNAME}" \
- -addext "subjectAltName = DNS:${HOSTNAME},DNS:${HOSTNAME^^}"
-
-RUN cp /etc/ssl/certs/apache-selfsigned.crt /usr/local/share/ca-certificates/apache-selfsigned.crt
-
-RUN update-ca-certificates
-RUN mv /usr/local/tomcat/webapps.dist/* /usr/local/tomcat/webapps
-
 # Add a new Apache site configuration for reverse proxying
-COPY my-apache-site.conf /etc/apache2/sites-available/${HOSTNAME}.conf
-
-RUN a2ensite ${HOSTNAME}.conf
-RUN a2dissite 000-default.conf
-RUN a2enmod ssl
-RUN a2enmod headers
-RUN a2enmod socache_shmcb
-RUN a2enmod rewrite
-RUN a2enmod proxy proxy_http proxy_ajp proxy_connect
-RUN apache2ctl configtest
-RUN echo "ServerName ${HOSTNAME}" | tee -a /etc/apache2/apache2.conf
-RUN service apache2 stop && service apache2 start &
-
-# Add user for Tomcat manager
-RUN echo '<?xml version="1.0" encoding="UTF-8"?>\
-<tomcat-users xmlns="http://tomcat.apache.org/xml" \
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-              xsi:schemaLocation="http://tomcat.apache.org/xml tomcat-users.xsd" \
-              version="1.0">\
-  <role rolename="manager-gui"/>\
-  <role rolename="manager-script"/>\
-  <user username="${TOMCAT_USERNAME}" password="${TOMCAT_PASSWORD}" roles="manager-gui,manager-script"/>\
-</tomcat-users>' > /usr/local/tomcat/conf/tomcat-users.xml
+COPY my-apache-site.conf /etc/apache2/my-apache-site.conf
 
 # Overwrite the context.xml for the manager application
 RUN echo '<Context antiResourceLocking="false" privileged="true" >'\
@@ -76,8 +60,12 @@ RUN echo '<Context antiResourceLocking="false" privileged="true" >'\
 '  <Manager sessionAttributeValueClassNameFilter="java\\.lang\\.(?:Boolean|Integer|Long|Number|String)|org\\.apache\\.catalina\\.filters\\.CsrfPreventionFilter\\$LruCache(?:\\$1)?|java\\.util\\.(?:Linked)?HashMap"/>'\
 '</Context>' > /usr/local/tomcat/webapps/manager/META-INF/context.xml
 
+COPY server.xml /usr/local/tomcat/conf/server.xml
+
+COPY ./start.sh /etc/apache2/start.sh
+RUN chmod +x /etc/apache2/start.sh
 # Expose ports for HTTP and HTTPS
 EXPOSE 80 443
 
 # Start Apache
-CMD ["apache2ctl", "-D", "FOREGROUND"]
+CMD ["/etc/apache2/start.sh"]
