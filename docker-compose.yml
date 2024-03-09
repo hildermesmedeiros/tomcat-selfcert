@@ -1,15 +1,23 @@
 version: '3.8'
 
 services:
-  apache-tomcat:
-    build: .
+  apache2:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "80:80"
       - "443:443"
-    hostname: my.tomcat.local
+    hostname: tomcat.multiversogeo.local
+    networks:
+      - apache2tomcat
     environment:
       - JAVA_OPTS=-Djava.awt.headless=true -Xmx128m -Xms64m
-      - TOMCAT_USERNAME=tomcatuser
+      - TOMCAT_USERNAME=tomcat
       - TOMCAT_PASSWORD=TOMcat123
       - TOMCAT_KEY_ALIAS=tomcat
       - TOMCAT_KEY_PASSWORD=TOMcat123
+      - HOSTNAME=tomcat.multiversogeo.local
+networks:
+  apache2tomcat:
+    driver: bridge
